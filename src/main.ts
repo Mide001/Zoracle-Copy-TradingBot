@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
+import { json } from 'express';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -9,6 +10,9 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     bodyParser: false, // Disable default body parser for webhook endpoint
   });
+  // Enable JSON body parsing for manager endpoints under /webhooks
+  app.use('/webhooks', json());
+
 
   app.useGlobalPipes(
     new ValidationPipe({

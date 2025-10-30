@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AppController } from './root.controller.js';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AlchemyWebhookModule } from './modules/alchemy-webhook/alchemy-webhook.module';
@@ -21,5 +22,6 @@ import configuration from './config/configuration';
     AlchemyWebhookModule,
     MonitoringModule,
   ],
+  controllers: [AppController],
 })
 export class AppModule {}

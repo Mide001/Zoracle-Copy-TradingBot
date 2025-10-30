@@ -14,7 +14,7 @@ export class AlchemySignatureMiddleware implements NestMiddleware {
   constructor(private configService: ConfigService) {}
 
   use(req: Request, res: Response, next: NextFunction) {
-    const signature = req.headers['x-alchemy-signature'] as string | undefined;
+    let signature = req.headers['x-alchemy-signature'] as string | undefined;
     const signingKey = this.configService.get<string>('alchemy.signingKey');
 
     if (!signature) {
@@ -36,16 +36,30 @@ export class AlchemySignatureMiddleware implements NestMiddleware {
     hmac.update(rawBody);
     const digest = hmac.digest('hex');
 
+    // Normalize header: support optional "sha256=" prefix and case-insensitive hex
+    if (signature?.startsWith('sha256=')) {
+      signature = signature.slice('sha256='.length);
+    }
+    const received = signature?.toLowerCase();
+    const expected = digest.toLowerCase();
+
     if (process.env.NODE_ENV !== 'production') {
       this.logger.debug(
-        `Signature check: received=${signature?.slice(0, 16)}..., expected=${digest.slice(
+        `Signature check: received=${received?.slice(0, 16)}..., expected=${expected.slice(
           0,
           16,
         )}...`,
       );
     }
 
-    if (signature !== digest) {
+    // Constant-time comparison to avoid timing attacks
+    const receivedBuf = Buffer.from(received ?? '', 'utf8');
+    const expectedBuf = Buffer.from(expected, 'utf8');
+    const matches =
+      receivedBuf.length === expectedBuf.length &&
+      crypto.timingSafeEqual(receivedBuf, expectedBuf);
+
+    if (!matches) {
       throw new UnauthorizedException('Invalid Alchemy signature');
     }
 

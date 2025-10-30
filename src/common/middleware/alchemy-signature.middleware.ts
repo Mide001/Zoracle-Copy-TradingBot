@@ -43,7 +43,7 @@ export class AlchemySignatureMiddleware implements NestMiddleware {
     const received = signature?.toLowerCase();
     const expected = digest.toLowerCase();
 
-    if (process.env.NODE_ENV !== 'production') {
+    if (process.env.NODE_ENV === 'development') {
       this.logger.debug(
         `Signature check: received=${received?.slice(0, 16)}..., expected=${expected.slice(
           0,

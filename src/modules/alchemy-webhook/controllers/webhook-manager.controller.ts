@@ -44,6 +44,24 @@ export class WebhookManagerController {
     };
   }
 
+  @Post('addresses/db')
+  async addAddressesToDbOnly(@Body() dto: AddAddressesDto) {
+    this.logger.log(
+      `DB-only add request for ${dto.addresses.length} addresses`,
+    );
+    const success: string[] = [];
+    const failed: { address: string; error: string }[] = [];
+    for (const address of dto.addresses) {
+      try {
+        await this.monitoringService.addAddress(address);
+        success.push(address);
+      } catch (e: any) {
+        failed.push({ address, error: e.message });
+      }
+    }
+    return { message: 'DB-only add processed', success, failed };
+  }
+
   @Post('sync')
   async syncToWebhook() {
     this.logger.log('Manual sync requested');

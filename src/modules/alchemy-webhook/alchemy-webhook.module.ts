@@ -5,6 +5,7 @@ import {
   RequestMethod,
 } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { json } from 'express';
 import { WebhookReceiverController } from './controllers/webhook-receiver.controller';
 import { WebhookManagerController } from './controllers/webhook-manager.controller';
 import { WebhookReceiverService } from './services/webhook-receiver.service';
@@ -24,5 +25,8 @@ export class AlchemyWebhookModule implements NestModule {
     consumer
       .apply(RawBodyMiddleware, AlchemySignatureMiddleware)
       .forRoutes({ path: 'webhook', method: RequestMethod.POST });
+
+    // Enable JSON body parsing for manager endpoints under /webhooks
+    consumer.apply(json()).forRoutes({ path: 'webhooks', method: RequestMethod.ALL });
   }
 }

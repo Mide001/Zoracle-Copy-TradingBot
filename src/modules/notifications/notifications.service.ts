@@ -9,9 +9,10 @@ export class NotificationsService {
   private readonly telegramBotApiUrl: string | null;
 
   constructor(private configService: ConfigService) {
-    this.telegramBotApiUrl = this.configService.get<string>(
+    const apiUrl = this.configService.get<string>(
       'notifications.telegramBotApiUrl',
     );
+    this.telegramBotApiUrl = apiUrl || null;
   }
 
   /**

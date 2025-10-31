@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { WebhookEventDto } from '../dto/webhook-event.dto';
 import { CopyTradingConfigService } from '../../copy-trading/services/copy-trading-config.service';
+import { RedisService } from '../../redis/redis.service';
 
 @Injectable()
 export class WebhookReceiverService {
@@ -8,6 +9,7 @@ export class WebhookReceiverService {
 
   constructor(
     private copyTradingConfigService: CopyTradingConfigService,
+    private redisService: RedisService,
   ) {}
 
   // Heuristics/Config
@@ -94,6 +96,15 @@ export class WebhookReceiverService {
   }
 
   async processWebhookEvent(event: WebhookEventDto): Promise<void> {
+    // Deduplication: Check if we've already processed this event
+    const eventKey = `${event.event.network}:${event.id}`;
+    const isProcessed = await this.redisService.isEventProcessed(eventKey);
+    
+    if (isProcessed) {
+      this.logger.debug(`Duplicate webhook event detected and skipped: ${event.id}`);
+      return;
+    }
+
     this.logger.log(`Processing webhook event ID: ${event.id}`);
     this.logger.log(`Event type: ${event.type}`);
     this.logger.log(`Network: ${event.event.network}`);
@@ -114,6 +125,15 @@ export class WebhookReceiverService {
     for (const activity of event.event.activity) {
       const trade = this.classifyActivity(activity);
       if (trade) {
+        // Additional deduplication at transaction level
+        const txKey = `${event.event.network}:tx:${trade.hash}`;
+        const isTxProcessed = await this.redisService.isEventProcessed(txKey);
+        
+        if (isTxProcessed) {
+          this.logger.debug(`Duplicate transaction detected and skipped: ${trade.hash}`);
+          continue;
+        }
+
         this.logger.log(
           `Trade detected: ${trade.type} ${trade.tokenName ?? trade.baseAsset} (${trade.baseAsset}) tx=${trade.hash} token=${trade.tokenAddress ?? 'n/a'} trader=${trade.traderAddress}`,
         );

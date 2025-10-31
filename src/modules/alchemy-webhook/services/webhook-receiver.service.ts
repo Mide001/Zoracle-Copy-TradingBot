@@ -27,6 +27,7 @@ export class WebhookReceiverService {
         baseAsset: string; // token being acquired/sold
         quoteAsset?: string; // if detectable by symbol
         hash: string;
+        tokenAddress?: string;
       }
     | null {
     // Require token-related category if present
@@ -38,6 +39,8 @@ export class WebhookReceiverService {
     const from = (activity.fromAddress || '').toLowerCase();
     const to = (activity.toAddress || '').toLowerCase();
     const asset = activity.asset as string | undefined; // token symbol if provided
+    const tokenAddress: string | undefined =
+      activity?.rawContract?.address || activity?.log?.address;
     const value = activity.value; // string number
 
     // Ensure we have an interaction with pool manager
@@ -74,6 +77,7 @@ export class WebhookReceiverService {
       baseAsset: asset!,
       quoteAsset,
       hash: activity.hash,
+      tokenAddress: tokenAddress?.toLowerCase(),
     };
   }
 
@@ -99,7 +103,7 @@ export class WebhookReceiverService {
       const trade = this.classifyActivity(activity);
       if (trade) {
         this.logger.log(
-          `Trade detected: ${trade.type} ${trade.baseAsset} tx=${trade.hash}`,
+          `Trade detected: ${trade.type} ${trade.baseAsset} tx=${trade.hash} token=${trade.tokenAddress ?? 'n/a'}`,
         );
         // TODO: trigger copy-trade pipeline here
       }

@@ -28,6 +28,7 @@ export class WebhookReceiverService {
         quoteAsset?: string; // if detectable by symbol
         hash: string;
         tokenAddress?: string;
+        tokenName?: string;
       }
     | null {
     // Require token-related category if present
@@ -78,6 +79,7 @@ export class WebhookReceiverService {
       quoteAsset,
       hash: activity.hash,
       tokenAddress: tokenAddress?.toLowerCase(),
+      tokenName: asset, // Alchemy payload typically includes symbol only; name can be resolved later
     };
   }
 
@@ -103,7 +105,7 @@ export class WebhookReceiverService {
       const trade = this.classifyActivity(activity);
       if (trade) {
         this.logger.log(
-          `Trade detected: ${trade.type} ${trade.baseAsset} tx=${trade.hash} token=${trade.tokenAddress ?? 'n/a'}`,
+          `Trade detected: ${trade.type} ${trade.tokenName ?? trade.baseAsset} (${trade.baseAsset}) tx=${trade.hash} token=${trade.tokenAddress ?? 'n/a'}`,
         );
         // TODO: trigger copy-trade pipeline here
       }

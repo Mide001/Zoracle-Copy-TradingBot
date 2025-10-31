@@ -3,6 +3,7 @@ import { BullModule } from '@nestjs/bull';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CopyTradeProcessor } from './processors/copy-trade.processor';
 import { QueueService } from './queue.service';
+import { SwapModule } from '../swap/swap.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { QueueService } from './queue.service';
     BullModule.registerQueue({
       name: 'copy-trade',
     }),
+    SwapModule,
   ],
   providers: [CopyTradeProcessor, QueueService],
   exports: [QueueService],

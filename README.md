@@ -4,7 +4,7 @@ A NestJS-based copy trading bot that automatically mirrors trades on Zora conten
 
 ## What It Does
 
-When a monitored trader executes a BUY or SELL trade on Zora content coins, the bot automatically executes the same trade for users who are subscribed to copy that trader. The bot tracks holdings and ensures full position exits when traders sell.
+When a monitored trader executes a BUY or SELL trade on Zora content coins, the bot automatically executes the same trade for users who are subscribed to copy that trader.
 
 ## Tech Stack
 

@@ -101,26 +101,44 @@ export class CopyTradeProcessor {
 
         // Handle token holdings tracking
         if (tradeType === 'BUY') {
-          // After successful BUY, we need to store the token amount received
-          // Note: Swap API response doesn't include token amount received,
-          // so we'll need to calculate or estimate it
-          // For now, we'll store based on the trader's token amount as reference
-          // TODO: Enhance to get actual token amount from swap response or query balance
+          // After successful BUY, wait for transaction to be mined then query actual balance
+          // Note: We cannot use trader's value as it may differ due to price/execution differences
           
           const holdingKey = `copy-trade:holdings:${configId}:${tokenAddress.toLowerCase()}:${normalizedNetwork}`;
           
-          // Use trader's token value as reference (or estimate based on ETH spent)
-          // This is an approximation - ideally we'd get actual received amount
-          const tokenAmountWei = job.data.value
-            ? this.swapService.convertToWei(job.data.value.toString())
-            : fromAmount; // Fallback to same as ETH spent (rough estimate)
+          // Wait a few seconds for transaction to be mined and balance to update
+          await new Promise((resolve) => setTimeout(resolve, 3000));
           
-          // Store without TTL (persist until SELL)
-          await this.redisService.set(holdingKey, tokenAmountWei);
-          
-          this.logger.log(
-            `Stored token holdings: ${tokenSymbol} (${tokenAmountWei} wei) for config ${configId}`,
+          // Query actual token balance
+          const actualBalance = await this.swapService.getTokenBalance(
+            accountName,
+            tokenAddress,
+            normalizedNetwork,
           );
+          
+          if (actualBalance) {
+            // Store actual balance received
+            await this.redisService.set(holdingKey, actualBalance);
+            this.logger.log(
+              `Stored actual token holdings: ${tokenSymbol} (${actualBalance} wei) for config ${configId}`,
+            );
+          } else {
+            // Fallback: Use a calculated estimate based on ETH spent (will be inaccurate)
+            // WARNING: This is a temporary fallback until balance query is implemented
+            this.logger.warn(
+              `Unable to query actual balance for ${tokenSymbol}. Using estimate (may be inaccurate).`,
+            );
+            // Store estimated value as fallback (divide ETH spent by estimated price ratio)
+            // This is a rough approximation and should be replaced with actual balance query
+            const estimatedTokenAmountWei = job.data.value
+              ? this.swapService.convertToWei(job.data.value.toString())
+              : fromAmount;
+            
+            await this.redisService.set(holdingKey, estimatedTokenAmountWei);
+            this.logger.warn(
+              `Stored estimated token holdings: ${tokenSymbol} (${estimatedTokenAmountWei} wei) - ACTUAL BALANCE QUERY NEEDED`,
+            );
+          }
         } else if (tradeType === 'SELL') {
           // After successful SELL, remove the holdings (sold 100%)
           const holdingKey = `copy-trade:holdings:${configId}:${tokenAddress.toLowerCase()}:${normalizedNetwork}`;

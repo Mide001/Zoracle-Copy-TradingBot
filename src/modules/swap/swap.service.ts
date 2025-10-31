@@ -2,6 +2,7 @@ import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosError } from 'axios';
 import { ExecuteSwapDto, SwapResponse } from './dto/execute-swap.dto';
+import type { BalanceResponse } from './dto/balance-response.dto';
 
 @Injectable()
 export class SwapService {
@@ -139,6 +140,73 @@ export class SwapService {
       return 'base';
     }
     return normalized;
+  }
+
+  /**
+   * Query token balance for a wallet
+   */
+  async getTokenBalance(
+    accountName: string,
+    tokenAddress: string,
+    network: string,
+  ): Promise<string | null> {
+    try {
+      this.logger.debug(
+        `Querying balance for ${accountName} token ${tokenAddress} on ${network}`,
+      );
+
+      const response = await axios.get<BalanceResponse>(
+        `${this.apiBaseUrl}/api/balances/${accountName}`,
+        {
+          params: {
+            network,
+          },
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000,
+        },
+      );
+
+      if (response.data.success && response.data.data?.balances) {
+        // Normalize token address for comparison (lowercase)
+        const normalizedTokenAddress = tokenAddress.toLowerCase();
+        
+        // Find the token in balances array
+        const tokenBalance = response.data.data.balances.find(
+          (balance: any) =>
+            balance.token?.contractAddress?.toLowerCase() ===
+            normalizedTokenAddress,
+        );
+
+        if (tokenBalance?.amount?.raw) {
+          const balanceWei = tokenBalance.amount.raw;
+          this.logger.log(
+            `Found balance for ${tokenBalance.token.symbol}: ${tokenBalance.amount.formatted} (${balanceWei} wei)`,
+          );
+          return balanceWei;
+        } else {
+          this.logger.warn(
+            `Token ${tokenAddress} not found in balances for ${accountName}`,
+          );
+          return null;
+        }
+      } else {
+        this.logger.error(
+          `Balance API returned unsuccessful response: ${response.data.message || 'Unknown error'}`,
+        );
+        return null;
+      }
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        this.logger.error(
+          `Error querying balance API: ${error.message}`,
+        );
+      } else {
+        this.logger.error(`Unexpected error querying balance: ${error.message}`);
+      }
+      return null;
+    }
   }
 }
 

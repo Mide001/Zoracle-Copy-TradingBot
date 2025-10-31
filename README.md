@@ -1,99 +1,210 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Zoracle Copy Trading Bot
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A NestJS-based copy trading bot that automatically mirrors trades on Zora content coins. The bot monitors trader wallets via Alchemy webhooks and executes matching trades for subscribed users in real-time.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Overview
 
-## Description
+This bot enables automated copy trading by:
+- **Monitoring trader wallets** on Base network through Alchemy webhooks
+- **Detecting trades** (BUY/SELL) in real-time
+- **Matching users** who want to copy specific traders
+- **Executing trades** automatically when traders make moves
+- **Tracking holdings** and selling 100% when traders sell
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+### Key Features
 
-## Project setup
+- 🎯 **Real-time trade detection** via Alchemy webhooks
+- 🔄 **Automatic trade execution** - BUY and SELL matching
+- 💾 **Redis-based deduplication** - Prevents duplicate trade processing
+- 📊 **Queue-based processing** - Reliable async trade execution with retries
+- 🗄️ **MongoDB configuration** - Store and manage copy trading configs
+- 🔐 **WalletConnect ready** - Infrastructure for wallet integration (pending implementation)
 
-```bash
-$ npm install
+## How It Works
+
+1. **Webhook Reception**: Receives trade events from Alchemy when monitored wallets execute trades
+2. **Trade Classification**: Identifies BUY vs SELL trades by analyzing pool interactions
+3. **Config Matching**: Finds all active copy-trading configs for the trader
+4. **Job Queuing**: Enqueues copy trade jobs for each matching user
+5. **Trade Execution**: Processes jobs asynchronously and executes swaps via API
+6. **Holdings Tracking**: Stores purchased token amounts in Redis for accurate SELL execution
+
+## Architecture
+
+```
+┌─────────────┐
+│  Alchemy    │
+│  Webhooks   │ ────► Webhook Receiver ────► Trade Classifier
+└─────────────┘                                    │
+                                                   ▼
+                                          Config Matcher (MongoDB)
+                                                   │
+                                                   ▼
+                                          Queue (Redis/Bull)
+                                                   │
+                                                   ▼
+                                          Copy Trade Processor
+                                                   │
+                                                   ▼
+                                          Swap Execution API
 ```
 
-## Compile and run the project
+## Tech Stack
+
+- **Framework**: NestJS (TypeScript)
+- **Webhook Provider**: Alchemy
+- **Database**: MongoDB (configs)
+- **Cache/Queue**: Redis + Bull Queue
+- **Wallet Integration**: WalletConnect (prepared, pending implementation)
+- **Swap Execution**: External API integration
+
+## Project Setup
+
+### Prerequisites
+
+- Node.js (v18+)
+- MongoDB (local or remote)
+- Redis (local or remote)
+- Alchemy account with webhook setup
+
+### Installation
 
 ```bash
-# development
-$ npm run start
+# Install dependencies
+npm install
 
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+# Copy environment variables
+cp .env.example .env
 ```
 
-## Run tests
+### Environment Variables
+
+Create a `.env` file with the following:
 
 ```bash
-# unit tests
-$ npm run test
+# Server
+PORT=8080
+HOST=0.0.0.0
 
-# e2e tests
-$ npm run test:e2e
+# Alchemy
+ALCHEMY_SIGNING_KEY=your_signing_key
+ALCHEMY_AUTH_TOKEN=your_auth_token
+ALCHEMY_WEBHOOK_ID=your_webhook_id
 
-# test coverage
-$ npm run test:cov
+# MongoDB
+MONGODB_URI=mongodb://localhost:27017/copy-trading
+# Or remote: mongodb+srv://user:pass@cluster.mongodb.net/database
+
+# Redis
+REDIS_URI=redis://localhost:6379
+# Or remote: redis://user:pass@host:6379
+
+# Swap API
+SWAP_API_BASE_URL=https://your-swap-api-url.com
 ```
 
-## Deployment
+## Running the Application
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### Development
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+# Start in watch mode
+npm run start:dev
+
+# Start in production mode
+npm run start:prod
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### Local Services (Docker)
 
-## Resources
+```bash
+# Start MongoDB
+docker run -d --name mongo -p 27017:27017 mongo:7
 
-Check out a few resources that may come in handy when working with NestJS:
+# Start Redis
+docker run -d --name redis -p 6379:6379 redis:7-alpine
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+# Optional: Redis GUI (Redis Commander)
+docker run -d --name redis-commander -p 8081:8081 \
+  -e REDIS_HOSTS=local:host.docker.internal:6379 \
+  rediscommander/redis-commander:latest
+```
 
-## Support
+## API Endpoints
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+### Webhooks
 
-## Stay in touch
+- `POST /webhook` - Receives Alchemy webhook events (signature verified)
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+### Management
+
+- `GET /webhooks/addresses` - List all monitored addresses
+- `POST /webhooks/addresses` - Add addresses (syncs to Alchemy + DB)
+- `DELETE /webhooks/addresses` - Remove addresses
+- `POST /webhooks/addresses/db` - Add addresses to DB only
+- `POST /webhooks/sync` - Sync DB addresses to Alchemy webhook
+
+### Health
+
+- `GET /` - Health check endpoint
+
+## Configuration
+
+Copy trading configs are stored in MongoDB (`copy_trading_config` collection):
+
+```json
+{
+  "configId": "unique_id",
+  "accountName": "zoracle-123456",
+  "walletAddress": "0x...",
+  "delegationAmount": "0.0001",
+  "maxSlippage": "0.01",
+  "isActive": true,
+  "telegramId": "123456789"
+}
+```
+
+## Trade Flow
+
+### BUY Trade
+1. Trader buys token → Webhook received
+2. Bot detects BUY trade
+3. Matches active configs for trader
+4. Executes swap: ETH → Token (using `delegationAmount`)
+5. Stores token amount in Redis for future SELL
+
+### SELL Trade
+1. Trader sells token → Webhook received
+2. Bot detects SELL trade
+3. Matches active configs for trader
+4. Retrieves stored token amount from Redis
+5. Executes swap: Token → ETH (sells 100% of holdings)
+6. Clears holdings from Redis
+
+## Features in Development
+
+- [ ] WalletConnect integration for direct wallet operations
+- [ ] Enhanced token amount tracking (query actual balances)
+- [ ] Telegram notifications for trade execution
+- [ ] Trade history and analytics
+- [ ] Multi-network support
+
+## Project Structure
+
+```
+src/
+├── modules/
+│   ├── alchemy-webhook/    # Webhook reception & processing
+│   ├── copy-trading/       # Config management & queries
+│   ├── monitoring/          # Address monitoring
+│   ├── queue/              # Job queue & processors
+│   ├── redis/              # Redis service & deduplication
+│   └── swap/               # Swap execution service
+├── common/
+│   └── middleware/         # Raw body & signature validation
+└── config/                 # Configuration factory
+```
 
 ## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
-# Zoracle-Copy-TradingBot
+MIT

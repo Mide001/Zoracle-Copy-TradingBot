@@ -14,8 +14,6 @@ export default () => ({
     uri: process.env.REDIS_URI || 'redis://localhost:6379',
   },
   swap: {
-    apiBaseUrl:
-      process.env.SWAP_API_BASE_URL ||
-      'https://usezoracle-tg-server-production.up.railway.app',
+    apiBaseUrl: process.env.SWAP_API_BASE_URL,
   },
 });

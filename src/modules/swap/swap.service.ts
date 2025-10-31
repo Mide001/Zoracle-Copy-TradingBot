@@ -13,9 +13,13 @@ export class SwapService {
   private readonly WETH_ADDRESS = '0x4200000000000000000000000000000000000006'; // WETH on Base
 
   constructor(private configService: ConfigService) {
-    this.apiBaseUrl =
-      this.configService.get<string>('swap.apiBaseUrl') ||
-      'https://usezoracle-tg-server-production.up.railway.app';
+    this.apiBaseUrl = this.configService.get<string>('swap.apiBaseUrl');
+    
+    if (!this.apiBaseUrl) {
+      throw new Error(
+        'SWAP_API_BASE_URL environment variable is required but not set',
+      );
+    }
   }
 
   /**

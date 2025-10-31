@@ -13,6 +13,17 @@ export class NotificationsService {
       'notifications.telegramBotApiUrl',
     );
     this.telegramBotApiUrl = apiUrl || null;
+    
+    if (this.telegramBotApiUrl) {
+      this.logger.log(`Telegram bot API URL configured: ${this.telegramBotApiUrl}`);
+    } else {
+      this.logger.warn('Telegram bot API URL not configured - notifications will be skipped');
+      // Debug: Check raw env var
+      const rawEnv = process.env.TELEGRAM_BOT_API_URL;
+      if (rawEnv) {
+        this.logger.debug(`Found TELEGRAM_BOT_API_URL in process.env: ${rawEnv}`);
+      }
+    }
   }
 
   /**

@@ -3,12 +3,16 @@ import type { Job } from 'bull';
 import { Logger } from '@nestjs/common';
 import { CopyTradeJobData } from '../dto/copy-trade-job.dto';
 import { SwapService } from '../../swap/swap.service';
+import { RedisService } from '../../redis/redis.service';
 
 @Processor('copy-trade')
 export class CopyTradeProcessor {
   private readonly logger = new Logger(CopyTradeProcessor.name);
 
-  constructor(private swapService: SwapService) {}
+  constructor(
+    private swapService: SwapService,
+    private redisService: RedisService,
+  ) {}
 
   @Process()
   async handleCopyTrade(job: Job<CopyTradeJobData>) {
@@ -55,20 +59,25 @@ export class CopyTradeProcessor {
         );
       } else {
         // SELL: Token → ETH
-        // For SELL, we need to calculate how much token to sell
-        // For now, we'll use the trader's token amount (value from activity)
-        // but this could be improved with better calculation
+        // Sell 100% of what was bought - retrieve from Redis
         fromToken = tokenAddress;
         toToken = nativeToken;
         
-        // Use delegationAmount as target ETH value, but we need token amount
-        // For simplicity, using a calculated amount - this may need adjustment
-        // Note: This is a simplification - ideally we'd calculate based on current price
-        const tokenAmount = job.data.value?.toString() || delegationAmount;
-        fromAmount = this.swapService.convertToWei(tokenAmount);
+        // Get the token amount we bought (stored in Redis after BUY)
+        const holdingKey = `copy-trade:holdings:${configId}:${tokenAddress.toLowerCase()}:${normalizedNetwork}`;
+        const storedTokenAmount = await this.redisService.get(holdingKey);
+        
+        if (!storedTokenAmount) {
+          throw new Error(
+            `No token holdings found for config ${configId} and token ${tokenSymbol}. Cannot sell without prior purchase.`,
+          );
+        }
+        
+        fromAmount = storedTokenAmount; // Already in wei format
+        const tokenAmountDisplay = (BigInt(storedTokenAmount) / BigInt(1e18)).toString();
         
         this.logger.log(
-          `SELL swap: Selling ${tokenSymbol} tokens (target ${delegationAmount} ETH value)`,
+          `SELL swap: Selling 100% of ${tokenSymbol} tokens (${tokenAmountDisplay} tokens)`,
         );
       }
 
@@ -89,6 +98,38 @@ export class CopyTradeProcessor {
         this.logger.log(
           `Transaction: ${swapResult.data.transactionHash} | Explorer: ${swapResult.data.transactionExplorer}`,
         );
+
+        // Handle token holdings tracking
+        if (tradeType === 'BUY') {
+          // After successful BUY, we need to store the token amount received
+          // Note: Swap API response doesn't include token amount received,
+          // so we'll need to calculate or estimate it
+          // For now, we'll store based on the trader's token amount as reference
+          // TODO: Enhance to get actual token amount from swap response or query balance
+          
+          const holdingKey = `copy-trade:holdings:${configId}:${tokenAddress.toLowerCase()}:${normalizedNetwork}`;
+          
+          // Use trader's token value as reference (or estimate based on ETH spent)
+          // This is an approximation - ideally we'd get actual received amount
+          const tokenAmountWei = job.data.value
+            ? this.swapService.convertToWei(job.data.value.toString())
+            : fromAmount; // Fallback to same as ETH spent (rough estimate)
+          
+          // Store without TTL (persist until SELL)
+          await this.redisService.set(holdingKey, tokenAmountWei);
+          
+          this.logger.log(
+            `Stored token holdings: ${tokenSymbol} (${tokenAmountWei} wei) for config ${configId}`,
+          );
+        } else if (tradeType === 'SELL') {
+          // After successful SELL, remove the holdings (sold 100%)
+          const holdingKey = `copy-trade:holdings:${configId}:${tokenAddress.toLowerCase()}:${normalizedNetwork}`;
+          await this.redisService.del(holdingKey);
+          
+          this.logger.log(
+            `Cleared token holdings for ${tokenSymbol} after successful SELL (config ${configId})`,
+          );
+        }
 
         return {
           success: true,

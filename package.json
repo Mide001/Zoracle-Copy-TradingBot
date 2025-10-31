@@ -20,6 +20,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@nestjs/bull": "^11.0.4",
     "@nestjs/cache-manager": "^3.0.1",
     "@nestjs/common": "^11.1.8",
     "@nestjs/config": "^4.0.2",
@@ -30,6 +31,7 @@
     "@walletconnect/sign-client": "^2.23.0",
     "@walletconnect/utils": "^2.23.0",
     "axios": "^1.13.1",
+    "bull": "^4.16.5",
     "cache-manager": "^7.2.4",
     "cache-manager-redis-store": "^3.0.1",
     "class-transformer": "^0.5.1",

@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CopyTradeProcessor } from './processors/copy-trade.processor';
 import { QueueService } from './queue.service';
 import { SwapModule } from '../swap/swap.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { SwapModule } from '../swap/swap.module';
       name: 'copy-trade',
     }),
     SwapModule,
+    NotificationsModule,
   ],
   providers: [CopyTradeProcessor, QueueService],
   exports: [QueueService],

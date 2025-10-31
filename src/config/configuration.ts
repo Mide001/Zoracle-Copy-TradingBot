@@ -16,4 +16,7 @@ export default () => ({
   swap: {
     apiBaseUrl: process.env.SWAP_API_BASE_URL,
   },
+  notifications: {
+    telegramBotApiUrl: process.env.TELEGRAM_BOT_API_URL,
+  },
 });

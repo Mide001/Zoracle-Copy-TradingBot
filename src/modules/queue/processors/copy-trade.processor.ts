@@ -4,6 +4,7 @@ import { Logger } from '@nestjs/common';
 import { CopyTradeJobData } from '../dto/copy-trade-job.dto';
 import { SwapService } from '../../swap/swap.service';
 import { RedisService } from '../../redis/redis.service';
+import { NotificationsService } from '../../notifications/notifications.service';
 
 @Processor('copy-trade')
 export class CopyTradeProcessor {
@@ -12,6 +13,7 @@ export class CopyTradeProcessor {
   constructor(
     private swapService: SwapService,
     private redisService: RedisService,
+    private notificationsService: NotificationsService,
   ) {}
 
   @Process()
@@ -116,9 +118,18 @@ export class CopyTradeProcessor {
             normalizedNetwork,
           );
           
+          let tokenAmountFormatted: string;
+
           if (actualBalance) {
             // Store actual balance received
             await this.redisService.set(holdingKey, actualBalance);
+            // Calculate formatted amount for notification
+            const balanceBigInt = BigInt(actualBalance);
+            tokenAmountFormatted = (
+              Number(balanceBigInt) / 1e18
+            ).toLocaleString(undefined, {
+              maximumFractionDigits: 6,
+            });
             this.logger.log(
               `Stored actual token holdings: ${tokenSymbol} (${actualBalance} wei) for config ${configId}`,
             );
@@ -135,18 +146,61 @@ export class CopyTradeProcessor {
               : fromAmount;
             
             await this.redisService.set(holdingKey, estimatedTokenAmountWei);
+            tokenAmountFormatted = (
+              Number(BigInt(estimatedTokenAmountWei)) / 1e18
+            ).toLocaleString(undefined, {
+              maximumFractionDigits: 6,
+            });
             this.logger.warn(
               `Stored estimated token holdings: ${tokenSymbol} (${estimatedTokenAmountWei} wei) - ACTUAL BALANCE QUERY NEEDED`,
             );
           }
+
+          // Send notification for BUY
+          await this.notificationsService.sendTradeNotification({
+            telegramId: job.data.telegramId,
+            configId,
+            accountName,
+            tradeType: 'BUY',
+            tokenSymbol,
+            tokenAddress,
+            tokenAmount: tokenAmountFormatted,
+            transactionHash: swapResult.data.transactionHash,
+            transactionExplorer: swapResult.data.transactionExplorer,
+            network: normalizedNetwork,
+          });
         } else if (tradeType === 'SELL') {
           // After successful SELL, remove the holdings (sold 100%)
           const holdingKey = `copy-trade:holdings:${configId}:${tokenAddress.toLowerCase()}:${normalizedNetwork}`;
+          const soldAmountWei = await this.redisService.get(holdingKey);
           await this.redisService.del(holdingKey);
           
           this.logger.log(
             `Cleared token holdings for ${tokenSymbol} after successful SELL (config ${configId})`,
           );
+
+          // Calculate formatted amount for notification
+          const tokenAmountFormatted = soldAmountWei
+            ? (
+                Number(BigInt(soldAmountWei)) / 1e18
+              ).toLocaleString(undefined, {
+                maximumFractionDigits: 6,
+              })
+            : 'all';
+
+          // Send notification for SELL
+          await this.notificationsService.sendTradeNotification({
+            telegramId: job.data.telegramId,
+            configId,
+            accountName,
+            tradeType: 'SELL',
+            tokenSymbol,
+            tokenAddress,
+            tokenAmount: tokenAmountFormatted,
+            transactionHash: swapResult.data.transactionHash,
+            transactionExplorer: swapResult.data.transactionExplorer,
+            network: normalizedNetwork,
+          });
         }
 
         return {

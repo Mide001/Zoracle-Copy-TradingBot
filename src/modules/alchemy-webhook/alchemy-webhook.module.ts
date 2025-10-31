@@ -13,11 +13,12 @@ import { WebhookManagerService } from './services/webhook-manager.service';
 import { AlchemyApiService } from './services/alchemy-api.service';
 import { MonitoringModule } from '../monitoring/monitoring.module';
 import { CopyTradingModule } from '../copy-trading/copy-trading.module';
+import { QueueModule } from '../queue/queue.module';
 import { RawBodyMiddleware } from '../../common/middleware/raw-body.middleware';
 import { AlchemySignatureMiddleware } from '../../common/middleware/alchemy-signature.middleware';
 
 @Module({
-  imports: [ConfigModule, MonitoringModule, CopyTradingModule],
+  imports: [ConfigModule, MonitoringModule, CopyTradingModule, QueueModule],
   controllers: [WebhookReceiverController, WebhookManagerController],
   providers: [WebhookReceiverService, WebhookManagerService, AlchemyApiService],
 })

@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { WebhookEventDto } from '../dto/webhook-event.dto';
 import { CopyTradingConfigService } from '../../copy-trading/services/copy-trading-config.service';
 import { RedisService } from '../../redis/redis.service';
+import { QueueService } from '../../queue/queue.service';
+import type { CopyTradeJobData } from '../../queue/dto/copy-trade-job.dto';
 
 @Injectable()
 export class WebhookReceiverService {
@@ -10,6 +12,7 @@ export class WebhookReceiverService {
   constructor(
     private copyTradingConfigService: CopyTradingConfigService,
     private redisService: RedisService,
+    private queueService: QueueService,
   ) {}
 
   // Heuristics/Config
@@ -148,12 +151,32 @@ export class WebhookReceiverService {
           this.logger.log(
             `Found ${matchingConfigs.length} active copy-trading config(s) for trader ${trade.traderAddress}:`,
           );
-          matchingConfigs.forEach((config) => {
+          
+          // Enqueue copy trade job for each matching config
+          for (const config of matchingConfigs) {
             this.logger.log(
               `  ✓ Config: ${config.configId} | Account: ${config.accountName} | Wallet: ${config.walletAddress} | MaxSlippage: ${config.maxSlippage} | Remaining: ${config.remainingAmount} | TelegramId: ${config.telegramId}`,
             );
-          });
-          // TODO: trigger copy-trade execution pipeline here
+
+            const jobData: CopyTradeJobData = {
+              configId: config.configId,
+              accountName: config.accountName,
+              walletAddress: config.walletAddress,
+              telegramId: config.telegramId,
+              maxSlippage: config.maxSlippage,
+              remainingAmount: config.remainingAmount,
+              delegationAmount: config.delegationAmount,
+              tradeType: trade.type,
+              tokenAddress: trade.tokenAddress || '',
+              tokenSymbol: trade.baseAsset,
+              traderAddress: trade.traderAddress,
+              txHash: trade.hash,
+              network: event.event.network,
+              value: activity.value,
+            };
+
+            await this.queueService.enqueueCopyTrade(jobData);
+          }
         } else {
           this.logger.debug(
             `No active copy-trading configs found for trader ${trade.traderAddress}`,

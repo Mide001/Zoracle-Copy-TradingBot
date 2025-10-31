@@ -1,9 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { WebhookEventDto } from '../dto/webhook-event.dto';
+import { CopyTradingConfigService } from '../../copy-trading/services/copy-trading-config.service';
 
 @Injectable()
 export class WebhookReceiverService {
   private readonly logger = new Logger(WebhookReceiverService.name);
+
+  constructor(
+    private copyTradingConfigService: CopyTradingConfigService,
+  ) {}
 
   // Heuristics/Config
   private readonly poolManagerAddresses = new Set(
@@ -29,6 +34,7 @@ export class WebhookReceiverService {
         hash: string;
         tokenAddress?: string;
         tokenName?: string;
+        traderAddress: string; // wallet address performing the trade
       }
     | null {
     // Require token-related category if present
@@ -59,15 +65,18 @@ export class WebhookReceiverService {
     // Direction heuristic:
     // - When TO is pool manager and asset is a token: user likely SELLING token to pool
     // - When FROM is pool manager and asset is a token: user likely BUYING token from pool
-    // We don't know the monitored wallet here; we treat activity record as the user's perspective.
+    // Determine trader address: opposite of pool manager
     let type: 'BUY' | 'SELL' | null = null;
+    let traderAddress: string | null = null;
     if (this.poolManagerAddresses.has(to)) {
       type = 'SELL';
+      traderAddress = from; // User sending token to pool
     } else if (this.poolManagerAddresses.has(from)) {
       type = 'BUY';
+      traderAddress = to; // User receiving token from pool
     }
 
-    if (!type) return null;
+    if (!type || !traderAddress) return null;
 
     // If the asset is a well-known quote symbol, flip semantics: asset is quote, so base is unknown
     // We'll still emit, but prefer when asset isn't a quote
@@ -80,6 +89,7 @@ export class WebhookReceiverService {
       hash: activity.hash,
       tokenAddress: tokenAddress?.toLowerCase(),
       tokenName: asset, // Alchemy payload typically includes symbol only; name can be resolved later
+      traderAddress,
     };
   }
 
@@ -105,9 +115,30 @@ export class WebhookReceiverService {
       const trade = this.classifyActivity(activity);
       if (trade) {
         this.logger.log(
-          `Trade detected: ${trade.type} ${trade.tokenName ?? trade.baseAsset} (${trade.baseAsset}) tx=${trade.hash} token=${trade.tokenAddress ?? 'n/a'}`,
+          `Trade detected: ${trade.type} ${trade.tokenName ?? trade.baseAsset} (${trade.baseAsset}) tx=${trade.hash} token=${trade.tokenAddress ?? 'n/a'} trader=${trade.traderAddress}`,
         );
-        // TODO: trigger copy-trade pipeline here
+
+        // Look up copy trading configs for this trader
+        const matchingConfigs =
+          await this.copyTradingConfigService.findActiveConfigsByWallet(
+            trade.traderAddress,
+          );
+
+        if (matchingConfigs.length > 0) {
+          this.logger.log(
+            `Found ${matchingConfigs.length} active copy-trading config(s) for trader ${trade.traderAddress}:`,
+          );
+          matchingConfigs.forEach((config) => {
+            this.logger.log(
+              `  ✓ Config: ${config.configId} | Account: ${config.accountName} | Wallet: ${config.walletAddress} | MaxSlippage: ${config.maxSlippage} | Remaining: ${config.remainingAmount} | TelegramId: ${config.telegramId}`,
+            );
+          });
+          // TODO: trigger copy-trade execution pipeline here
+        } else {
+          this.logger.debug(
+            `No active copy-trading configs found for trader ${trade.traderAddress}`,
+          );
+        }
       }
     }
   }

@@ -5,7 +5,7 @@ export default () => ({
     signingKey: process.env.ALCHEMY_SIGNING_KEY,
     authToken: process.env.ALCHEMY_AUTH_TOKEN,
     webhookId: process.env.ALCHEMY_WEBHOOK_ID,
-    apiBaseUrl: process.env.ALCHEMY_API_BASE_URL || 'https://dashboard.alchemy.com/api',
+    apiBaseUrl: process.env.ALCHEMY_API_BASE_URL,
   },
   mongodb: {
     uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/copy-trading',

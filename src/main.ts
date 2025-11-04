@@ -40,16 +40,17 @@ async function bootstrap() {
       }),
     );
 
-    const configService = app.get(ConfigService);
-    const port = configService.get<number>('port');
-    const host = configService.get<string>('host') || '0.0.0.0';
-
+    // Railway requires binding to 0.0.0.0 and using PORT env var directly
+    // See: https://docs.railway.com/reference/errors/application-failed-to-respond
+    const port = process.env.PORT ? parseInt(process.env.PORT, 10) : null;
+    
     if (!port) {
       logger.error('PORT environment variable is required but not set');
       process.exit(1);
     }
 
-    await app.listen(port, host);
+    // Bind to 0.0.0.0 as required by Railway
+    await app.listen(port, '0.0.0.0');
     logger.log(`Application listening on ${host}:${port}`);
     logger.log(`Webhook endpoint: http://${host}:${port}/webhook`);
     logger.log(`Management endpoints: http://${host}:${port}/webhooks/*`);

@@ -13,27 +13,19 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     const redisUrl = this.configService.get<string>('redis.uri');
     
     if (!redisUrl) {
-      this.logger.warn('Redis URI not configured, using localhost:6379');
-      this.client = new Redis({
-        host: 'localhost',
-        port: 6379,
-        retryStrategy: (times) => {
-          const delay = Math.min(times * 50, 2000);
-          this.logger.log(`Redis retry attempt ${times}, delay ${delay}ms`);
-          return delay;
-        },
-        maxRetriesPerRequest: 3,
-      });
-    } else {
-      this.client = new Redis(redisUrl, {
-        retryStrategy: (times) => {
-          const delay = Math.min(times * 50, 2000);
-          this.logger.log(`Redis retry attempt ${times}, delay ${delay}ms`);
-          return delay;
-        },
-        maxRetriesPerRequest: 3,
-      });
+      throw new Error(
+        'REDIS_URI environment variable is required but not set. Please configure Redis connection in your .env file.',
+      );
     }
+
+    this.client = new Redis(redisUrl, {
+      retryStrategy: (times) => {
+        const delay = Math.min(times * 50, 2000);
+        this.logger.log(`Redis retry attempt ${times}, delay ${delay}ms`);
+        return delay;
+      },
+      maxRetriesPerRequest: 3,
+    });
 
     this.client.on('connect', () => {
       this.logger.log('Redis client connected');

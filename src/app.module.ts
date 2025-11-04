@@ -18,9 +18,21 @@ import configuration from './config/configuration';
     QueueModule,
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        uri: configService.get<string>('mongodb.uri'),
-      }),
+      useFactory: async (configService: ConfigService) => {
+        const uri = configService.get<string>('mongodb.uri');
+        if (!uri) {
+          throw new Error('MONGODB_URI environment variable is required but not set');
+        }
+        return {
+          uri,
+          // Connection options to prevent blocking startup
+          serverSelectionTimeoutMS: 5000, // 5 second timeout
+          socketTimeoutMS: 45000,
+          connectTimeoutMS: 10000,
+          retryWrites: true,
+          retryReads: true,
+        };
+      },
       inject: [ConfigService],
     }),
     AlchemyWebhookModule,

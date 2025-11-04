@@ -42,16 +42,16 @@ export class NotificationsService {
         `Sending trade notification to Telegram ID ${dto.telegramId} for ${dto.tradeType} ${dto.tokenSymbol}`,
       );
 
-      const response = await axios.post(
-        `${this.telegramBotApiUrl}/api/notifications/trade`,
-        dto,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          timeout: 10000, // 10 second timeout
+      const url = `${this.telegramBotApiUrl}/api/notifications/trade`;
+      this.logger.debug(`Sending notification to: ${url}`);
+      this.logger.debug(`Notification payload: ${JSON.stringify(dto)}`);
+
+      const response = await axios.post(url, dto, {
+        headers: {
+          'Content-Type': 'application/json',
         },
-      );
+        timeout: 10000, // 10 second timeout
+      });
 
       if (response.data.success) {
         this.logger.log(
@@ -61,6 +61,7 @@ export class NotificationsService {
         this.logger.warn(
           `Notification API returned unsuccessful response: ${response.data.message || 'Unknown error'}`,
         );
+        this.logger.debug(`Response data: ${JSON.stringify(response.data)}`);
       }
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -69,6 +70,16 @@ export class NotificationsService {
         this.logger.error(
           `Failed to send trade notification: ${axiosError.message}`,
         );
+        if (axiosError.response) {
+          this.logger.error(
+            `Notification API error response: ${axiosError.response.status} - ${JSON.stringify(axiosError.response.data)}`,
+          );
+        }
+        if (axiosError.request) {
+          this.logger.error(
+            `Notification API request failed: ${axiosError.request.url || 'No URL'} - ${axiosError.code || 'No error code'}`,
+          );
+        }
       } else {
         this.logger.error(
           `Unexpected error sending notification: ${error.message}`,

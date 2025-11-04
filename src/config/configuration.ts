@@ -1,5 +1,5 @@
 export default () => ({
-  port: parseInt(process.env.PORT ?? '8080', 10),
+  port: process.env.PORT ? parseInt(process.env.PORT, 10) : undefined,
   host: process.env.HOST || '0.0.0.0',
   alchemy: {
     signingKey: process.env.ALCHEMY_SIGNING_KEY,

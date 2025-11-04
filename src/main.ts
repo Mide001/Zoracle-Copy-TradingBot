@@ -23,8 +23,13 @@ async function bootstrap() {
   );
 
   const configService = app.get(ConfigService);
-  const port = configService.get<number>('port') ?? 3000;
-  const host = configService.get<string>('host') ?? '0.0.0.0';
+  const port = configService.get<number>('port');
+  const host = configService.get<string>('host') || '0.0.0.0';
+
+  if (!port) {
+    logger.error('PORT environment variable is required but not set');
+    process.exit(1);
+  }
 
   await app.listen(port, host);
   logger.log(`Application listening on ${host}:${port}`);

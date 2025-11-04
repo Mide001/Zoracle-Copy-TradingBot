@@ -51,9 +51,9 @@ async function bootstrap() {
 
     // Bind to 0.0.0.0 as required by Railway
     await app.listen(port, '0.0.0.0');
-    logger.log(`Application listening on ${host}:${port}`);
-    logger.log(`Webhook endpoint: http://${host}:${port}/webhook`);
-    logger.log(`Management endpoints: http://${host}:${port}/webhooks/*`);
+    logger.log(`Application listening on 0.0.0.0:${port}`);
+    logger.log(`Webhook endpoint: http://0.0.0.0:${port}/webhook`);
+    logger.log(`Management endpoints: http://0.0.0.0:${port}/webhooks/*`);
   } catch (error) {
     logger.error(`Failed to start application: ${error.message}`);
     logger.error(error.stack);

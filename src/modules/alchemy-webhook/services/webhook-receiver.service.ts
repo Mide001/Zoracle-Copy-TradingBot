@@ -58,6 +58,9 @@ export class WebhookReceiverService {
     // Ensure we have an interaction with pool manager
     const touchesPool = this.poolManagerAddresses.has(from) || this.poolManagerAddresses.has(to);
     if (!touchesPool) {
+      this.logger.debug(
+        `Activity filtered: not a swap (from: ${from}, to: ${to}, pool managers: ${Array.from(this.poolManagerAddresses).join(', ')})`,
+      );
       return null;
     }
 
@@ -127,7 +130,14 @@ export class WebhookReceiverService {
     // Classify trades (BUY/SELL) and ignore other interactions
     for (const activity of event.event.activity) {
       const trade = this.classifyActivity(activity);
-      if (trade) {
+      if (!trade) {
+        this.logger.debug(
+          `Activity filtered out (not a recognized swap): ${activity.asset} from ${activity.fromAddress} to ${activity.toAddress}`,
+        );
+        continue;
+      }
+      
+      {
         // Additional deduplication at transaction level
         const txKey = `${event.event.network}:tx:${trade.hash}`;
         const isTxProcessed = await this.redisService.isEventProcessed(txKey);

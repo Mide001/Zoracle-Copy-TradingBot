@@ -263,9 +263,17 @@ export class CopyTradeProcessor {
             );
           }
         }
+        
+        // Mark job as permanently failed - no retries for insufficient balance
+        // Retrying won't help since the balance won't magically increase
+        this.logger.warn(
+          `Marking job [${job.id}] as permanently failed due to insufficient balance (no retries)`,
+        );
+        await job.moveToFailed(error as Error, true);
+        return; // Don't re-throw - job is already marked as failed
       }
       
-      // Re-throw to trigger Bull retry mechanism
+      // Re-throw to trigger Bull retry mechanism for other errors
       throw error;
     }
   }

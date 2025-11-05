@@ -244,7 +244,7 @@ export class CopyTradeProcessor {
           this.logger.log(
             `Insufficient balance detected for config ${configId}, sending alert notification`,
           );
-          const msg = `Insufficient funds to copy trade ${tradeType} ${tokenSymbol} on ${network}. Please fund account ${accountName} to continue copy-trading.`;
+          const msg = `⚠️ Copy trade from ${configId} failed.\n\nReason: Insufficient funds in your wallet.\nPlease add funds to keep copying their trades automatically.`;
           try {
             await this.notificationsService.sendAlertNotification({
               telegramId: job.data.telegramId,

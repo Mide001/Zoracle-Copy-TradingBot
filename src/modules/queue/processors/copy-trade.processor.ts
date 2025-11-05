@@ -231,22 +231,37 @@ export class CopyTradeProcessor {
         );
 
       if (isInsufficientBalance) {
-        this.logger.log(
-          `Insufficient balance detected for config ${configId}, sending alert notification`,
-        );
-        const msg = `Insufficient funds to copy trade ${tradeType} ${tokenSymbol} on ${network}. Please fund account ${accountName} to continue copy-trading.`;
-        try {
-          await this.notificationsService.sendAlertNotification({
-            telegramId: job.data.telegramId,
-            configId,
-            accountName,
-            message: msg,
-          });
-          this.logger.log(`Alert notification sent for insufficient balance (config ${configId})`);
-        } catch (notifError) {
-          this.logger.error(
-            `Failed to send insufficient balance alert: ${notifError.message}`,
+        // Deduplicate notifications: only send once per trade (txHash + configId)
+        // This prevents duplicate notifications when job retries
+        const notificationKey = `notification:sent:insufficient-balance:${txHash}:${configId}`;
+        const alreadySent = await this.redisService.get(notificationKey);
+        
+        if (alreadySent) {
+          this.logger.log(
+            `Insufficient balance notification already sent for trade ${txHash} (config ${configId}), skipping duplicate`,
           );
+        } else {
+          this.logger.log(
+            `Insufficient balance detected for config ${configId}, sending alert notification`,
+          );
+          const msg = `Insufficient funds to copy trade ${tradeType} ${tokenSymbol} on ${network}. Please fund account ${accountName} to continue copy-trading.`;
+          try {
+            await this.notificationsService.sendAlertNotification({
+              telegramId: job.data.telegramId,
+              configId,
+              accountName,
+              message: msg,
+            });
+            
+            // Mark notification as sent (TTL: 1 hour to prevent spam if same trade fails multiple times)
+            await this.redisService.set(notificationKey, '1', 3600);
+            
+            this.logger.log(`Alert notification sent for insufficient balance (config ${configId})`);
+          } catch (notifError) {
+            this.logger.error(
+              `Failed to send insufficient balance alert: ${notifError.message}`,
+            );
+          }
         }
       }
       

@@ -10,15 +10,17 @@ import {
 import { Type } from 'class-transformer';
 
 class RawContractDto {
+  @IsOptional()
   @IsString()
-  rawValue: string;
+  rawValue?: string;
 
   @IsOptional()
   @IsString()
   address?: string;
 
+  @IsOptional()
   @IsNumber()
-  decimals: number;
+  decimals?: number;
 }
 
 class LogDto {
@@ -75,12 +77,14 @@ class ActivityDto {
   @IsString()
   category: string;
 
+  @IsOptional()
   @ValidateNested()
   @Type(() => RawContractDto)
-  rawContract: RawContractDto;
+  rawContract?: RawContractDto;
 
+  @IsOptional()
   @IsString()
-  blockTimestamp: string;
+  blockTimestamp?: string;
 
   @IsOptional()
   @ValidateNested()
@@ -97,8 +101,9 @@ class EventDto {
   @Type(() => ActivityDto)
   activity: ActivityDto[];
 
+  @IsOptional()
   @IsString()
-  source: string;
+  source?: string;
 }
 
 export class WebhookEventDto {

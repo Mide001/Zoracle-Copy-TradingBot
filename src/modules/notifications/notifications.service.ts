@@ -88,5 +88,51 @@ export class NotificationsService {
       // Don't throw - notifications are non-critical
     }
   }
+
+  /**
+   * Send a generic alert/info notification to user
+   */
+  async sendAlertNotification(params: {
+    telegramId: string;
+    configId: string;
+    accountName: string;
+    message: string;
+  }): Promise<void> {
+    if (!this.telegramBotApiUrl) {
+      this.logger.warn('Telegram bot API URL not configured, skipping alert');
+      return;
+    }
+
+    try {
+      const url = `${this.telegramBotApiUrl}/api/notifications/alert`;
+      this.logger.log(
+        `Sending alert notification to Telegram ID ${params.telegramId}: ${params.message}`,
+      );
+      await axios.post(
+        url,
+        {
+          telegramId: params.telegramId,
+          configId: params.configId,
+          accountName: params.accountName,
+          message: params.message,
+        },
+        {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 10000,
+        },
+      );
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError;
+        this.logger.error(
+          `Failed to send alert notification: ${axiosError.message}`,
+        );
+      } else {
+        this.logger.error(
+          `Unexpected error sending alert notification: ${error.message}`,
+        );
+      }
+    }
+  }
 }
 

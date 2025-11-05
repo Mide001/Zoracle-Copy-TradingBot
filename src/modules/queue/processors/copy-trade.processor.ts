@@ -219,6 +219,20 @@ export class CopyTradeProcessor {
       this.logger.error(
         `Copy trade job [${job.id}] failed for config ${configId}: ${error.message}`,
       );
+
+      // Notify user on insufficient balance
+      if (
+        typeof error?.message === 'string' &&
+        /insufficient balance/i.test(error.message)
+      ) {
+        const msg = `Insufficient funds to copy trade ${tradeType} ${tokenSymbol} on ${network}. Please fund account ${accountName} to continue copy-trading.`;
+        await this.notificationsService.sendAlertNotification({
+          telegramId: job.data.telegramId,
+          configId,
+          accountName,
+          message: msg,
+        });
+      }
       
       // Re-throw to trigger Bull retry mechanism
       throw error;

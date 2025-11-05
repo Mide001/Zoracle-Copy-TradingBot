@@ -216,22 +216,38 @@ export class CopyTradeProcessor {
         throw new Error(swapResult.error || 'Swap execution failed');
       }
     } catch (error) {
+      const errorMessage = error?.message || String(error);
       this.logger.error(
-        `Copy trade job [${job.id}] failed for config ${configId}: ${error.message}`,
+        `Copy trade job [${job.id}] failed for config ${configId}: ${errorMessage}`,
       );
 
-      // Notify user on insufficient balance
-      if (
-        typeof error?.message === 'string' &&
-        /insufficient balance/i.test(error.message)
-      ) {
+      // Notify user on insufficient balance - check multiple patterns
+      const isInsufficientBalance = 
+        typeof errorMessage === 'string' &&
+        (
+          /insufficient.*balance/i.test(errorMessage) ||
+          /insufficient.*funds/i.test(errorMessage) ||
+          /insufficient.*eth/i.test(errorMessage)
+        );
+
+      if (isInsufficientBalance) {
+        this.logger.log(
+          `Insufficient balance detected for config ${configId}, sending alert notification`,
+        );
         const msg = `Insufficient funds to copy trade ${tradeType} ${tokenSymbol} on ${network}. Please fund account ${accountName} to continue copy-trading.`;
-        await this.notificationsService.sendAlertNotification({
-          telegramId: job.data.telegramId,
-          configId,
-          accountName,
-          message: msg,
-        });
+        try {
+          await this.notificationsService.sendAlertNotification({
+            telegramId: job.data.telegramId,
+            configId,
+            accountName,
+            message: msg,
+          });
+          this.logger.log(`Alert notification sent for insufficient balance (config ${configId})`);
+        } catch (notifError) {
+          this.logger.error(
+            `Failed to send insufficient balance alert: ${notifError.message}`,
+          );
+        }
       }
       
       // Re-throw to trigger Bull retry mechanism

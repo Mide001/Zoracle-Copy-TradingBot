@@ -91,6 +91,7 @@ export class NotificationsService {
 
   /**
    * Send a generic alert/info notification to user
+   * Throws on failure since alert notifications are important
    */
   async sendAlertNotification(params: {
     telegramId: string;
@@ -100,7 +101,7 @@ export class NotificationsService {
   }): Promise<void> {
     if (!this.telegramBotApiUrl) {
       this.logger.warn('Telegram bot API URL not configured, skipping alert');
-      return;
+      throw new Error('Telegram bot API URL not configured');
     }
 
     try {
@@ -108,7 +109,7 @@ export class NotificationsService {
       this.logger.log(
         `Sending alert notification to Telegram ID ${params.telegramId}: ${params.message}`,
       );
-      await axios.post(
+      const response = await axios.post(
         url,
         {
           telegramId: params.telegramId,
@@ -121,16 +122,34 @@ export class NotificationsService {
           timeout: 10000,
         },
       );
+
+      if (response.data?.success !== false) {
+        this.logger.log(
+          `Alert notification sent successfully to Telegram ID ${params.telegramId}`,
+        );
+      } else {
+        throw new Error(
+          `Notification API returned unsuccessful response: ${response.data?.message || 'Unknown error'}`,
+        );
+      }
     } catch (error) {
       if (axios.isAxiosError(error)) {
         const axiosError = error as AxiosError;
+        const errorMessage = axiosError.response?.data
+          ? JSON.stringify(axiosError.response.data)
+          : axiosError.message;
         this.logger.error(
-          `Failed to send alert notification: ${axiosError.message}`,
+          `Failed to send alert notification: ${errorMessage}`,
+        );
+        throw new Error(
+          `Failed to send alert notification: ${errorMessage}`,
         );
       } else {
+        const errorMessage = error?.message || 'Unknown error';
         this.logger.error(
-          `Unexpected error sending alert notification: ${error.message}`,
+          `Unexpected error sending alert notification: ${errorMessage}`,
         );
+        throw error;
       }
     }
   }

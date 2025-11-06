@@ -108,15 +108,25 @@ export class CopyTradeProcessor {
           
           const holdingKey = `copy-trade:holdings:${configId}:${tokenAddress.toLowerCase()}:${normalizedNetwork}`;
           
-          // Wait a few seconds for transaction to be mined and balance to update
-          await new Promise((resolve) => setTimeout(resolve, 3000));
+          // Reduced wait time: Most transactions are mined within 1-2 seconds on modern chains
+          // We'll try immediately and retry if needed, rather than blocking
+          await new Promise((resolve) => setTimeout(resolve, 1000));
           
-          // Query actual token balance
-          const actualBalance = await this.swapService.getTokenBalance(
-            accountName,
-            tokenAddress,
-            normalizedNetwork,
-          );
+          // Query actual token balance with retry logic
+          let actualBalance: string | null = null;
+          let retries = 2;
+          while (retries > 0 && !actualBalance) {
+            actualBalance = await this.swapService.getTokenBalance(
+              accountName,
+              tokenAddress,
+              normalizedNetwork,
+            );
+            if (!actualBalance && retries > 1) {
+              // Wait another second before retry
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+            }
+            retries--;
+          }
           
           let tokenAmountFormatted: string;
 

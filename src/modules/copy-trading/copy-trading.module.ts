@@ -6,12 +6,14 @@ import {
 } from './schemas/copy-trading-config.schema';
 import { CopyTradingConfigRepository } from './repositories/copy-trading-config.repository';
 import { CopyTradingConfigService } from './services/copy-trading-config.service';
+import { RedisModule } from '../redis/redis.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: CopyTradingConfig.name, schema: CopyTradingConfigSchema },
     ]),
+    RedisModule,
   ],
   providers: [CopyTradingConfigRepository, CopyTradingConfigService],
   exports: [CopyTradingConfigService],

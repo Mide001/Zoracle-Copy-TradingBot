@@ -31,17 +31,15 @@ export class WebhookReceiverService {
     'DAI',
   ]);
 
-  private classifyActivity(activity: any):
-    | {
-        type: 'BUY' | 'SELL';
-        baseAsset: string; // token being acquired/sold
-        quoteAsset?: string; // if detectable by symbol
-        hash: string;
-        tokenAddress?: string;
-        tokenName?: string;
-        traderAddress: string; // wallet address performing the trade
-      }
-    | null {
+  private classifyActivity(activity: any): {
+    type: 'BUY' | 'SELL';
+    baseAsset: string; // token being acquired/sold
+    quoteAsset?: string; // if detectable by symbol
+    hash: string;
+    tokenAddress?: string;
+    tokenName?: string;
+    traderAddress: string; // wallet address performing the trade
+  } | null {
     // Require token-related category if present
     const category = (activity.category || '').toString().toUpperCase();
     if (category && category !== 'TOKEN') {
@@ -56,7 +54,8 @@ export class WebhookReceiverService {
     const value = activity.value; // string number
 
     // Ensure we have an interaction with pool manager
-    const touchesPool = this.poolManagerAddresses.has(from) || this.poolManagerAddresses.has(to);
+    const touchesPool =
+      this.poolManagerAddresses.has(from) || this.poolManagerAddresses.has(to);
     if (!touchesPool) {
       this.logger.debug(
         `Activity filtered: not a swap (from: ${from}, to: ${to}, pool managers: ${Array.from(this.poolManagerAddresses).join(', ')})`,
@@ -105,9 +104,11 @@ export class WebhookReceiverService {
     // Deduplication: Check if we've already processed this event
     const eventKey = `${event.event.network}:${event.id}`;
     const isProcessed = await this.redisService.isEventProcessed(eventKey);
-    
+
     if (isProcessed) {
-      this.logger.debug(`Duplicate webhook event detected and skipped: ${event.id}`);
+      this.logger.debug(
+        `Duplicate webhook event detected and skipped: ${event.id}`,
+      );
       return;
     }
 
@@ -136,14 +137,16 @@ export class WebhookReceiverService {
         );
         continue;
       }
-      
+
       // Trade detected, process it
       // Additional deduplication at transaction level
       const txKey = `${event.event.network}:tx:${trade.hash}`;
       const isTxProcessed = await this.redisService.isEventProcessed(txKey);
-      
+
       if (isTxProcessed) {
-        this.logger.debug(`Duplicate transaction detected and skipped: ${trade.hash}`);
+        this.logger.debug(
+          `Duplicate transaction detected and skipped: ${trade.hash}`,
+        );
         continue;
       }
 
@@ -161,7 +164,7 @@ export class WebhookReceiverService {
         this.logger.log(
           `Found ${matchingConfigs.length} active copy-trading config(s) for trader ${trade.traderAddress}:`,
         );
-        
+
         // Enqueue copy trade job for each matching config
         for (const config of matchingConfigs) {
           this.logger.log(

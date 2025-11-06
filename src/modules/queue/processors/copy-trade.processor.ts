@@ -101,83 +101,50 @@ export class CopyTradeProcessor {
           `Transaction: ${swapResult.data.transactionHash} | Explorer: ${swapResult.data.transactionExplorer}`,
         );
 
-        // Handle token holdings tracking
+        // Return immediately after swap - don't block on balance queries or notifications
+        // This reduces latency significantly
+        const result = {
+          success: true,
+          configId,
+          accountName,
+          tradeType,
+          tokenSymbol,
+          transactionHash: swapResult.data.transactionHash,
+          blockNumber: swapResult.data.blockNumber,
+        };
+
+        // Handle token holdings tracking and notifications asynchronously (non-blocking)
         if (tradeType === 'BUY') {
-          // After successful BUY, wait for transaction to be mined then query actual balance
-          // Note: We cannot use trader's value as it may differ due to price/execution differences
-          
           const holdingKey = `copy-trade:holdings:${configId}:${tokenAddress.toLowerCase()}:${normalizedNetwork}`;
           
-          // Reduced wait time: Most transactions are mined within 1-2 seconds on modern chains
-          // We'll try immediately and retry if needed, rather than blocking
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          
-          // Query actual token balance with retry logic
-          let actualBalance: string | null = null;
-          let retries = 2;
-          while (retries > 0 && !actualBalance) {
-            actualBalance = await this.swapService.getTokenBalance(
-              accountName,
-              tokenAddress,
-              normalizedNetwork,
-            );
-            if (!actualBalance && retries > 1) {
-              // Wait another second before retry
-              await new Promise((resolve) => setTimeout(resolve, 1000));
-            }
-            retries--;
-          }
-          
-          let tokenAmountFormatted: string;
+          // Store estimated amount immediately for SELL operations
+          // This ensures SELL can proceed even if balance query fails
+          const estimatedTokenAmountWei = job.data.value
+            ? this.swapService.convertToWei(job.data.value.toString())
+            : fromAmount;
+          await this.redisService.set(holdingKey, estimatedTokenAmountWei);
+          this.logger.debug(
+            `Stored estimated token holdings for immediate SELL capability: ${tokenSymbol}`,
+          );
 
-          if (actualBalance) {
-            // Store actual balance received
-            await this.redisService.set(holdingKey, actualBalance);
-            // Calculate formatted amount for notification
-            const balanceBigInt = BigInt(actualBalance);
-            tokenAmountFormatted = (
-              Number(balanceBigInt) / 1e18
-            ).toLocaleString(undefined, {
-              maximumFractionDigits: 6,
-            });
-            this.logger.log(
-              `Stored actual token holdings: ${tokenSymbol} (${actualBalance} wei) for config ${configId}`,
-            );
-          } else {
-            // Fallback: Use a calculated estimate based on ETH spent (will be inaccurate)
-            // WARNING: This is a temporary fallback until balance query is implemented
-            this.logger.warn(
-              `Unable to query actual balance for ${tokenSymbol}. Using estimate (may be inaccurate).`,
-            );
-            // Store estimated value as fallback (divide ETH spent by estimated price ratio)
-            // This is a rough approximation and should be replaced with actual balance query
-            const estimatedTokenAmountWei = job.data.value
-              ? this.swapService.convertToWei(job.data.value.toString())
-              : fromAmount;
-            
-            await this.redisService.set(holdingKey, estimatedTokenAmountWei);
-            tokenAmountFormatted = (
-              Number(BigInt(estimatedTokenAmountWei)) / 1e18
-            ).toLocaleString(undefined, {
-              maximumFractionDigits: 6,
-            });
-            this.logger.warn(
-              `Stored estimated token holdings: ${tokenSymbol} (${estimatedTokenAmountWei} wei) - ACTUAL BALANCE QUERY NEEDED`,
-            );
-          }
-
-          // Send notification for BUY
-          await this.notificationsService.sendTradeNotification({
-            telegramId: job.data.telegramId,
+          // Fire and forget: Query balance in background and update Redis
+          // Don't wait for this - it can take 1-3 seconds
+          this.updateBuyHoldingsAsync(
             configId,
             accountName,
-            tradeType: 'BUY',
-            tokenSymbol,
             tokenAddress,
-            tokenAmount: tokenAmountFormatted,
-            transactionHash: swapResult.data.transactionHash,
-            transactionExplorer: swapResult.data.transactionExplorer,
-            network: normalizedNetwork,
+            tokenSymbol,
+            normalizedNetwork,
+            holdingKey,
+            fromAmount,
+            job.data.value,
+            swapResult.data.transactionHash,
+            swapResult.data.transactionExplorer,
+            job.data.telegramId,
+          ).catch((error) => {
+            this.logger.error(
+              `Error in async buy holdings update: ${error.message}`,
+            );
           });
         } else if (tradeType === 'SELL') {
           // After successful SELL, remove the holdings (sold 100%)
@@ -189,7 +156,7 @@ export class CopyTradeProcessor {
             `Cleared token holdings for ${tokenSymbol} after successful SELL (config ${configId})`,
           );
 
-          // Calculate formatted amount for notification
+          // Send notification asynchronously (non-blocking)
           const tokenAmountFormatted = soldAmountWei
             ? (
                 Number(BigInt(soldAmountWei)) / 1e18
@@ -198,30 +165,27 @@ export class CopyTradeProcessor {
               })
             : 'all';
 
-          // Send notification for SELL
-          await this.notificationsService.sendTradeNotification({
-            telegramId: job.data.telegramId,
-            configId,
-            accountName,
-            tradeType: 'SELL',
-            tokenSymbol,
-            tokenAddress,
-            tokenAmount: tokenAmountFormatted,
-            transactionHash: swapResult.data.transactionHash,
-            transactionExplorer: swapResult.data.transactionExplorer,
-            network: normalizedNetwork,
-          });
+          this.notificationsService
+            .sendTradeNotification({
+              telegramId: job.data.telegramId,
+              configId,
+              accountName,
+              tradeType: 'SELL',
+              tokenSymbol,
+              tokenAddress,
+              tokenAmount: tokenAmountFormatted,
+              transactionHash: swapResult.data.transactionHash,
+              transactionExplorer: swapResult.data.transactionExplorer,
+              network: normalizedNetwork,
+            })
+            .catch((error) => {
+              this.logger.error(
+                `Error sending SELL notification: ${error.message}`,
+              );
+            });
         }
 
-        return {
-          success: true,
-          configId,
-          accountName,
-          tradeType,
-          tokenSymbol,
-          transactionHash: swapResult.data.transactionHash,
-          blockNumber: swapResult.data.blockNumber,
-        };
+        return result;
       } else {
         throw new Error(swapResult.error || 'Swap execution failed');
       }
@@ -286,6 +250,98 @@ export class CopyTradeProcessor {
       // Re-throw to trigger Bull retry mechanism for other errors
       throw error;
     }
+  }
+
+  /**
+   * Update buy holdings asynchronously (non-blocking)
+   * This method runs in the background to query actual balance and update Redis
+   */
+  private async updateBuyHoldingsAsync(
+    configId: string,
+    accountName: string,
+    tokenAddress: string,
+    tokenSymbol: string,
+    normalizedNetwork: string,
+    holdingKey: string,
+    fromAmount: string,
+    value: string | undefined,
+    transactionHash: string,
+    transactionExplorer: string,
+    telegramId: string,
+  ): Promise<void> {
+    // Wait for transaction to be mined (reduced from 3s to 1s)
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    
+    // Query actual token balance with retry logic
+    let actualBalance: string | null = null;
+    let retries = 2;
+    while (retries > 0 && !actualBalance) {
+      actualBalance = await this.swapService.getTokenBalance(
+        accountName,
+        tokenAddress,
+        normalizedNetwork,
+      );
+      if (!actualBalance && retries > 1) {
+        // Wait another second before retry
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      retries--;
+    }
+    
+    let tokenAmountFormatted: string;
+
+    if (actualBalance) {
+      // Store actual balance received
+      await this.redisService.set(holdingKey, actualBalance);
+      // Calculate formatted amount for notification
+      const balanceBigInt = BigInt(actualBalance);
+      tokenAmountFormatted = (
+        Number(balanceBigInt) / 1e18
+      ).toLocaleString(undefined, {
+        maximumFractionDigits: 6,
+      });
+      this.logger.log(
+        `Updated token holdings with actual balance: ${tokenSymbol} (${actualBalance} wei) for config ${configId}`,
+      );
+    } else {
+      // Fallback: Use a calculated estimate based on ETH spent
+      this.logger.warn(
+        `Unable to query actual balance for ${tokenSymbol}. Keeping estimated value.`,
+      );
+      const estimatedTokenAmountWei = value
+        ? this.swapService.convertToWei(value.toString())
+        : fromAmount;
+      
+      await this.redisService.set(holdingKey, estimatedTokenAmountWei);
+      tokenAmountFormatted = (
+        Number(BigInt(estimatedTokenAmountWei)) / 1e18
+      ).toLocaleString(undefined, {
+        maximumFractionDigits: 6,
+      });
+      this.logger.warn(
+        `Kept estimated token holdings: ${tokenSymbol} (${estimatedTokenAmountWei} wei)`,
+      );
+    }
+
+    // Send notification asynchronously (non-blocking)
+    this.notificationsService
+      .sendTradeNotification({
+        telegramId,
+        configId,
+        accountName,
+        tradeType: 'BUY',
+        tokenSymbol,
+        tokenAddress,
+        tokenAmount: tokenAmountFormatted,
+        transactionHash,
+        transactionExplorer,
+        network: normalizedNetwork,
+      })
+      .catch((error) => {
+        this.logger.error(
+          `Error sending BUY notification: ${error.message}`,
+        );
+      });
   }
 }
 

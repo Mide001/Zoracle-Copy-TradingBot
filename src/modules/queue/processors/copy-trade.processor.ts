@@ -137,7 +137,7 @@ export class CopyTradeProcessor {
             normalizedNetwork,
             holdingKey,
             fromAmount,
-            job.data.value,
+            job.data.value?.toString(),
             swapResult.data.transactionHash,
             swapResult.data.transactionExplorer,
             job.data.telegramId,
